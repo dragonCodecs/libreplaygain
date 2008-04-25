@@ -31,56 +31,13 @@
  */
 
 /*
- *  Here's the deal. Call
- *
- *    InitGainAnalysis ( long samplefreq );
- *
- *  to initialize everything. Call
- *
- *    AnalyzeSamples ( const Float_t*  left_samples,
- *                     const Float_t*  right_samples,
- *                     size_t          num_samples,
- *                     int             num_channels );
- *
- *  as many times as you want, with as many or as few samples as you want.
- *  If mono, pass the sample buffer in through left_samples, leave
- *  right_samples NULL, and make sure num_channels = 1.
- *
- *    GetTitleGain()
- *
- *  will return the recommended dB level change for all samples analyzed
- *  SINCE THE LAST TIME you called GetTitleGain() OR InitGainAnalysis().
- *
- *    GetAlbumGain()
- *
- *  will return the recommended dB level change for all samples analyzed
- *  since InitGainAnalysis() was called and finalized with GetTitleGain().
- *
- *  Pseudo-code to process an album:
- *
- *    Float_t       l_samples [4096];
- *    Float_t       r_samples [4096];
- *    size_t        num_samples;
- *    unsigned int  num_songs;
- *    unsigned int  i;
- *
- *    InitGainAnalysis ( 44100 );
- *    for ( i = 1; i <= num_songs; i++ ) {
- *        while ( ( num_samples = getSongSamples ( song[i], left_samples, right_samples ) ) > 0 )
- *            AnalyzeSamples ( left_samples, right_samples, num_samples, 2 );
- *        fprintf ("Recommended dB change for song %2d: %+6.2f dB\n", i, GetTitleGain() );
- *    }
- *    fprintf ("Recommended dB change for whole album: %+6.2f dB\n", GetAlbumGain() );
- */
-
-/*
  *  So here's the main source of potential code confusion:
  *
  *  The filters applied to the incoming samples are IIR filters,
  *  meaning they rely on up to <filter order> number of previous samples
  *  AND up to <filter order> number of previous filtered samples.
  *
- *  I set up the AnalyzeSamples routine to minimize memory usage and interface
+ *  I set up the gain_analyze_samples routine to minimize memory usage and interface
  *  complexity. The speed isn't compromised too much (I don't think), but the
  *  internal complexity is higher than it should be for such a relatively
  *  simple routine.
@@ -114,26 +71,26 @@ typedef signed int      Int32_t;
 #define MAX_SAMPLES_PER_WINDOW  (size_t) (MAX_SAMP_FREQ * RMS_WINDOW_TIME)      // max. Samples per Time slice
 #define PINK_REF                64.82 //298640883795                              // calibration value
 
-Float_t          linprebuf [MAX_ORDER * 2];
-Float_t*         linpre;                                          // left input samples, with pre-buffer
-Float_t          lstepbuf  [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
-Float_t*         lstep;                                           // left "first step" (i.e. post first filter) samples
-Float_t          loutbuf   [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
-Float_t*         lout;                                            // left "out" (i.e. post second filter) samples
-Float_t          rinprebuf [MAX_ORDER * 2];
-Float_t*         rinpre;                                          // right input samples ...
-Float_t          rstepbuf  [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
-Float_t*         rstep;
-Float_t          routbuf   [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
-Float_t*         rout;
-long             sampleWindow;                                    // number of samples required to reach number of milliseconds required for RMS window
-long             totsamp;
-double           lsum;
-double           rsum;
-int              freqindex;
-int              first;
-static Uint32_t  A [(size_t)(STEPS_per_dB * MAX_dB)];
-static Uint32_t  B [(size_t)(STEPS_per_dB * MAX_dB)];
+static Float_t  linprebuf [MAX_ORDER * 2];
+static Float_t* linpre;                                          // left input samples, with pre-buffer
+static Float_t  lstepbuf  [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
+static Float_t* lstep;                                           // left "first step" (i.e. post first filter) samples
+static Float_t  loutbuf   [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
+static Float_t* lout;                                            // left "out" (i.e. post second filter) samples
+static Float_t  rinprebuf [MAX_ORDER * 2];
+static Float_t* rinpre;                                          // right input samples ...
+static Float_t  rstepbuf  [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
+static Float_t* rstep;
+static Float_t  routbuf   [MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
+static Float_t* rout;
+static long     sampleWindow;                                    // number of samples required to reach number of milliseconds required for RMS window
+static long     totsamp;
+static double   lsum;
+static double   rsum;
+static int      freqindex;
+static int      first;
+static Uint32_t A [(size_t)(STEPS_per_dB * MAX_dB)];
+static Uint32_t B [(size_t)(STEPS_per_dB * MAX_dB)];
 
 // for each filter:
 // [0] 48 kHz, [1] 44.1 kHz, [2] 32 kHz, [3] 24 kHz, [4] 22050 Hz, [5] 16 kHz, [6] 12 kHz, [7] is 11025 Hz, [8] 8 kHz
@@ -231,7 +188,7 @@ filterButter (const Float_t* input, Float_t* output, size_t nSamples, const Floa
 
 // returns a INIT_GAIN_ANALYSIS_OK if successful, INIT_GAIN_ANALYSIS_ERROR if not
 
-int
+static int
 ResetSampleFrequency ( long samplefreq ) {
     int  i;
 
@@ -264,7 +221,7 @@ ResetSampleFrequency ( long samplefreq ) {
 }
 
 int
-InitGainAnalysis ( long samplefreq )
+gain_init_analysis ( long samplefreq )
 {
     if (ResetSampleFrequency(samplefreq) != INIT_GAIN_ANALYSIS_OK) {
         return INIT_GAIN_ANALYSIS_ERROR;
@@ -289,7 +246,7 @@ static __inline double fsqr(const double d)
 }
 
 int
-AnalyzeSamples ( const Float_t* left_samples, const Float_t* right_samples, size_t num_samples, int num_channels )
+gain_analyze_samples ( const Float_t* left_samples, const Float_t* right_samples, size_t num_samples, int num_channels )
 {
     const Float_t*  curleft;
     const Float_t*  curright;
@@ -442,7 +399,7 @@ analyzeResult ( Uint32_t* Array, size_t len )
 
 
 Float_t
-GetTitleGain ( void )
+gain_get_title ( void )
 {
     Float_t  retval;
     int    i;
@@ -464,7 +421,7 @@ GetTitleGain ( void )
 
 
 Float_t
-GetAlbumGain ( void )
+gain_get_album ( void )
 {
     return analyzeResult ( B, sizeof(B)/sizeof(*B) );
 }
