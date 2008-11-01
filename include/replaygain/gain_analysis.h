@@ -69,6 +69,10 @@ int gain_analyze_samples ( const Float_t* left_samples, const Float_t* right_sam
 /// If mono, pass the sample buffer in through left_samples, leave
 /// right_samples NULL, and make sure num_channels = 1.
 
+Float_t gain_get_chapter ( void );
+/// will return the recommended dB level change for all samples analyzed
+/// SINCE THE LAST TIME you called gain_get_chapter() OR gain_init_analysis() OR gain_get_title.
+
 Float_t gain_get_title ( void );
 /// will return the recommended dB level change for all samples analyzed
 /// SINCE THE LAST TIME you called gain_get_title() OR gain_init_analysis().
