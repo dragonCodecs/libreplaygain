@@ -2,6 +2,8 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.4)
 
 project(libreplaygain C)
 
+include(GNUInstallDirs)
+
 set(CMAKE_VERBOSE_MAKEFILE false)
 
 if(NOT MSVC)
