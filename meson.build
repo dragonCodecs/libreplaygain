@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: LGPL-2.1-or-later
+# SPDX-License-Identifier: BSD-3-Clause
 # SPDX-FileCopyrightText: 2023 Rachel Mant <git@dragonmux.network>
 project(
 	'libreplaygain',
