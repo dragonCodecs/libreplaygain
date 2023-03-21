@@ -7,6 +7,10 @@ project(
 	meson_version: '>= 0.63',
 )
 
+if cxx.get_id() == 'msvc'
+	add_project_arguments('-D_CRT_SECURE_NO_WARNINGS', language: 'c')
+endif
+
 subdir('include')
 subdir('src')
 
