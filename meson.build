@@ -10,7 +10,7 @@ project(
 subdir('include')
 subdir('src')
 
-cuefile_dep = declare_dependency(
+libreplaygain_dep = declare_dependency(
 	link_with: replaygain,
 	include_directories: includes,
 	version: meson.project_version()
