@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 # SPDX-FileCopyrightText: 2023 Rachel Mant <git@dragonmux.network>
-c = meson.get_compiler('c')
-
 maths = c.find_library('m', required: false)
 
 replaygainSrcs = [
